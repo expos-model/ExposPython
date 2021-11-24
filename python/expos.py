@@ -43,11 +43,12 @@
 import os
 
 # set PROJ_LIB as Python environmental variable
-# os.environ['PROJ_LIB'] = "C:/Anaconda3/envs/hf/Library/share/proj"
+os.environ['PROJ_LIB'] = "C:/Anaconda3/envs/hf/Library/share/proj"
 
 import sys
 import math
 import numpy as np
+import pandas as pd
 import rasterio as rio
 from rasterio.plot import show
 import matplotlib.pyplot as plt
@@ -139,7 +140,7 @@ def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
  
     # get profile
     profile = dem_r.profile
-    profile.update(dtype='int32', nodata=-9999, count=6)
+    profile.update(dtype='int32', nodata=-9999, count=1)
 
     # get number of rows & columns
     nrows = dem_r.height
@@ -237,7 +238,7 @@ def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
                 else:
                     x_dist = (p_shift[j] - p_shift[h_pos[i]])*cell_x
                     y_dist = (j - h_pos[i])*cell_y
-                    xy_dist = math.sqrt(x_dist**2 + y_dist**2)
+                    xy_dist = (x_dist**2 + y_dist**2)**0.5
                     z_dist = xy_dist * tan_inf
           
                     # exposed (beyond wind shadow)
@@ -306,7 +307,7 @@ def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
 
     # get profile
     profile = dem_r.profile
-    profile.update(dtype='int32', nodata=-9999, count=6)
+    profile.update(dtype='int32', nodata=-9999, count=1)
  
     # get number of rows & columns
     nrows = dem_r.height
@@ -404,7 +405,7 @@ def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
                 else:
                     x_dist = (p_shift[i] - p_shift[h_pos[j]])*cell_x
                     y_dist = (i - h_pos[j])*cell_y
-                    xy_dist = math.sqrt(x_dist**2 + y_dist**2)
+                    xy_dist = (x_dist**2 + y_dist**2)**0.5
                     z_dist = xy_dist * tan_inf
           
                     # exposed (beyond wind shadow)
@@ -529,6 +530,140 @@ def expos_model(wind_direction, inflection_angle, save=True, console=True):
     else:
         north_north_west(wind_direction, inflection_angle, t_dir, save, console)
 
+# expos_damage uses output from Hurrecon and Expos to create a raster
+# of hurricane wind damage where topograhic exposure at each location
+# is determined by peak wind direction. Protected areas are assigned 
+# None if the predicted damage is EF0 or lower and EF0 if the predicted 
+# damage is EF1 or higher. This function requires a hurricane tif file 
+# created by Hurrecon, eight exposure files created by Expos (N, NE, E, 
+# etc), and a reprojection file in csv format that contains lat long 
+# coordinates for the lower left and upper right corners of the digital 
+# elevation model.
+#   hurricane - hurricane name (as it appears in tif file)
+#   inflection_angle - inflection angle (degrees)
+#   save - whether to save results to file
+#   console - whether to display messages in console
+# returns a raster of landscape-level wind damage
+
+def expos_damage (hurricane, inflection_angle, save=True, console=True):
+    # get current working directory
+    cwd = os.getcwd()
+
+    # read exposure files as arrays
+    ee_a = [None] * 8
+
+    for i in range(0, 8):
+        wind_direction = i*45
+
+        expos_file = cwd + "/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
+
+        ee_a[i] = rio.open(expos_file).read(1)
+
+    # read dem file
+    dem_file = cwd + "/dem.tif"
+    dem_r = rio.open(dem_file)
+
+    dem_rows = dem_r.height
+    dem_cols = dem_r.width
+
+    # get dem array
+    dem_a = dem_r.read(1)
+
+    # get profile
+    profile = dem_r.profile
+    profile.update(dtype='int32', nodata=-9999, count=1)
+
+    dem_r.close()
+
+    # read hurrecon file
+    hur_file = cwd + "/" + hurricane + ".tif"
+    hur_r = rio.open(hur_file)
+    ff_a = hur_r.read(2)  # enhanced Fujita scale
+    cc_a = hur_r.read(4)  # cardinal wind direction (1-8)
+
+    hur_rows = hur_r.height
+    hur_cols = hur_r.width
+
+    hur_xmn = hur_r.bounds.left
+    hur_xmx = hur_r.bounds.right
+    hur_ymn = hur_r.bounds.bottom
+    hur_ymx = hur_r.bounds.top
+
+    hur_r.close()
+
+    # read reproject file
+    reproject_file = "reproject.csv"
+    rp = pd.read_csv(reproject_file)
+
+    lat_0 = rp.lat_0[0]
+    lon_0 = rp.lon_0[0]
+    lat_1 = rp.lat_1[0]
+    lon_1 = rp.lon_1[0]
+
+    # create damage array
+    dam_a = np.where(dem_a != 0, 1, 0)
+
+    # calculate exposure values
+    for i in range(0, dem_rows):
+        # display every 10th row number
+        if i % 10 == 0:
+            print("              ", end="")
+            print("\rrow", i, end="")
+
+        for j in range(0, dem_cols):
+            # get lat long coordinates
+            hur_x = lon_0 + (lon_1 - lon_0)*(j + 0.5)/dem_cols
+            hur_y = lat_1 - (lat_1 - lat_0)*(i + 0.5)/dem_rows
+
+            # get row & col in hurricane file (note: row 1 = top of raster)
+            hur_row = math.ceil(hur_rows - hur_rows*(hur_y - hur_ymn)/(hur_ymx - hur_ymn))
+            hur_col = math.ceil(hur_cols*(hur_x - hur_xmn)/(hur_xmx - hur_xmn))
+
+            # skip missing values in dem
+            if dem_a[i][j] != 0:
+                # get peak wind direction (1-8)
+                pdir = int(cc_a[hur_row][hur_col])
+
+                if pdir == 0:
+                    # no damage if no peak wind direction
+                    dam_a[i][j] = 1
+
+                else:
+                    # get topographic exposure
+                    exposure = int(ee_a[pdir-1][i][j])
+
+                    # get fujita scale damage (0-7)
+                    damage = int(ff_a[hur_row][hur_col])
+
+                    # protected
+                    if exposure == 1:
+                        # no damage if less than EF1
+                        if damage <= 2:
+                            dam_a[i][j] = 1
+
+                        # EF0 if EF1 to EF5
+                        else:
+                            dam_a[i][j] = 2
+
+                    # exposed
+                    else:
+                        dam_a[i][j] = damage
+
+    if (save == True):
+        # save modeled results in GeoTiff file
+        dam_file = cwd + "/" + hurricane + "-damage.tif"
+
+        dam_tif = rio.open(dam_file, 'w', **profile)
+        dam_tif.write(dam_a, 1)
+        dam_tif.close()
+   
+        if console == True:
+          print("\nSaving to", dam_file, "\n")
+
+    else:
+        # return modeled values as raster
+        return dam_a
+
 
 ### SUMMARIZING FUNCTIONS #################################
 
@@ -575,7 +710,7 @@ def expos_summarize(filename, console=True):
     st = st + "Easting: " + str(round(xmn)) + " to " + str(round(xmx)) + "\n"
     st = st + "Cell height: " + str(round(cell_y)) + "\n"
     st = st + "Cell width: " + str(round(cell_x)) + "\n"
-    st = st + "Values: " + str(round(val_min)) + " to " + str(round(val_max)) + "\n"
+    st = st + "Values: " + str(round(val_min, 1)) + " to " + str(round(val_max, 1)) + "\n"
     
     # display results in console
     if console == True:
@@ -584,11 +719,14 @@ def expos_summarize(filename, console=True):
 
 ### PLOTTING FUNCTIONS ####################################
 
-# expos_plot creates a plot of a specified raster file.
+# expos_plot creates a plot of a specified raster file. Optional arguments
+# include plot type, title, and color palette.
 #   filename - name of input raster file
+#   title - plot title
+#   col - color palette
 # no return value
 
-def expos_plot(filename):
+def expos_plot(filename, title="", col="viridis"):
     # get current working directory
     cwd = os.getcwd()
  
@@ -597,12 +735,52 @@ def expos_plot(filename):
     check_file_exists(file_path)
     rr = rio.open(file_path)
 
+    # get colormap with white background
+    cmap = plt.get_cmap(col)
+    cmap.set_under('white')  
+
     # create plot
-    plt.title(filename)
-    img = rr.read(1)       
-    plt.imshow(img)
+    if "dem" in filename:
+        if title == "":
+            title = "Elevation"
+        img = rr.read(1)
+        plt.title(title)
+        plt.imshow(img, cmap=cmap, vmin=0.9)
+        show((rr, 1), cmap=cmap, vmin=0.9)
+ 
+    elif "expos" in filename:
+        if title == "":
+            title = filename
+        img = rr.read(1)
+        plt.title(title)
+        vals = [0, 1, 2]
+        labs = ["", "Pro", "Exp"]
+        plt.imshow(img, cmap=cmap, vmin=0.9)
+        cbar = plt.colorbar(shrink=0.3)
+        cbar.set_ticks(vals)
+        cbar.set_ticklabels(labs)
+        show((rr, 1), cmap=cmap, vmin=0.9)
 
-    show((rr, 1))
+    elif "damage" in filename:
+        if title == "":
+            title = filename
+        img = rr.read(1)
+        plt.title(title)
+        vals = [0, 1, 2, 3, 4, 5, 6, 7]
+        labs = ["", "None", "EF0", "EF1", "EF2", "EF3", "EF4", "EF5"]
+        plt.imshow(img, cmap=cmap, vmin=0.9)
+        cbar = plt.colorbar(shrink=0.3)
+        cbar.set_ticks(vals)
+        cbar.set_ticklabels(labs)
+        show((rr, 1), cmap=cmap, vmin=0.9)
 
+    else:
+        if title == "":
+            title = filename
+        img = rr.read(1)
+        plt.title(title)
+        show((rr, 1), cmap=cmap, vmin=0.9)
+
+    plt.clf()   
     rr.close()
 

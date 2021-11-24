@@ -5,9 +5,8 @@ of wind direction and inflection angle.
 
 The input file is assumed to be a raster file in GeoTiff format with missing values
 represented by zero.  Cells may be rectangular but horizontal and vertical units 
-must be the same. Columns are assumed to be closely aligned with true north (if not,
-wind direction values must be adjusted accordingly). The name of the input file is 
-assumed to be "dem.tif".
+must be the same. Columns are assumed to be closely aligned with true north.
+The name of the input file is assumed to be "dem.tif".
 
 The output file is a raster file in GeoTiff format with the following values: 
 0 = missing data, 1 = protected, 2 = exposed. Output files are named "expos-xxx-yy.tif"
@@ -56,6 +55,7 @@ function.
 ```{r}	
 expos_set_path
 expos_model
+expos_damage
 expos_summarize
 expos_plot
 ```
@@ -64,6 +64,10 @@ The expos_set_path function sets the path for the current set of model runs.
 
 The expos_model function creates a raster file of wind exposure as a function
 of wind direction and inflection angle.
+
+The expos_damage function uses output from Hurrecon and Expos to create a raster
+file of wind damage where topograhic exposure at each location is determined 
+by peak wind direction. 
 
 The expos_summarize function displays summary information for a specified raster
 file, including the number of rows and columns, spatial extent, cell height and 
@@ -77,6 +81,7 @@ The expos_plot function creates a plot of a specified raster file.
 ```{r}
 expos_set_path("c:/expos/r/mass_30m")
 expos_model(wind_direction=90, inflection_angle=6)
+expos_damage("AL061938", inflection_angle=6)
 expos_summarize("dem")
 expos_plot("expos-090-06")
 ```
