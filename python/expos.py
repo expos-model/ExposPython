@@ -52,6 +52,7 @@ import pandas as pd
 import rasterio as rio
 from rasterio.plot import show
 import matplotlib.pyplot as plt
+import matplotlib.colors
 
 
 ### INTERNAL FUNCTIONS ####################################
@@ -723,10 +724,10 @@ def expos_summarize(filename, console=True):
 # include plot type, title, and color palette.
 #   filename - name of input raster file
 #   title - plot title
-#   col - color palette
+#   colormap - color palette
 # no return value
 
-def expos_plot(filename, title="", col="viridis"):
+def expos_plot(filename, title="", colormap="default"):
     # get current working directory
     cwd = os.getcwd()
  
@@ -735,9 +736,29 @@ def expos_plot(filename, title="", col="viridis"):
     check_file_exists(file_path)
     rr = rio.open(file_path)
 
-    # get colormap with white background
-    cmap = plt.get_cmap(col)
-    cmap.set_under('white')  
+    rr_max = rr.read(1).max()
+
+    # color palettes
+    if colormap == "default":
+        cmap = plt.get_cmap("viridis")
+        cmap.set_under('white')  
+    
+    elif colormap == "exposure":
+        cols = ["grey", "blue"]
+        cmap = matplotlib.colors.ListedColormap(cols)
+        cmap.set_under('white')
+
+    elif colormap == "damage":
+        all_cols = ["grey", "purple", "blue", "green", "yellow", "orange", "red"]
+        cols = []
+        for i in range(0, rr_max):
+            cols.append(all_cols[i])
+        cmap = matplotlib.colors.ListedColormap(cols)
+        cmap.set_under('white')
+
+    else:
+        cmap = plt.get_cmap(colormap)
+        cmap.set_under('white')
 
     # create plot
     if "dem" in filename:
