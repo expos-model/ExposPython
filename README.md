@@ -67,7 +67,8 @@ of wind direction and inflection angle.
 
 The expos_damage function uses output from Hurrecon and Expos to create a raster
 file of wind damage where topograhic exposure at each location is determined 
-by peak wind direction. 
+by peak wind direction. If a location is protected, the enhanced Fujita scale 
+rating is reduced by two.
 
 The expos_summarize function displays summary information for a specified raster
 file, including the number of rows and columns, spatial extent, cell height and 

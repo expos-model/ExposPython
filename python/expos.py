@@ -533,13 +533,12 @@ def expos_model(wind_direction, inflection_angle, save=True, console=True):
 
 # expos_damage uses output from Hurrecon and Expos to create a raster
 # of hurricane wind damage where topograhic exposure at each location
-# is determined by peak wind direction. Protected areas are assigned 
-# None if the predicted damage is EF0 or lower and EF0 if the predicted 
-# damage is EF1 or higher. This function requires a hurricane tif file 
-# created by Hurrecon, eight exposure files created by Expos (N, NE, E, 
-# etc), and a reprojection file in csv format that contains lat long 
-# coordinates for the lower left and upper right corners of the digital 
-# elevation model.
+# is determined by peak wind direction. If a location is protected, 
+# the enhanced Fujita scale rating is reduced by two. This function 
+# requires a hurricane tif file created by Hurrecon, eight exposure files 
+# created by Expos (N, NE, E, etc), and a reprojection file in csv format 
+# that contains lat long coordinates for the lower left and upper right 
+# corners of the digital elevation model.
 #   hurricane - hurricane name (as it appears in tif file)
 #   inflection_angle - inflection angle (degrees)
 #   save - whether to save results to file
@@ -638,13 +637,13 @@ def expos_damage (hurricane, inflection_angle, save=True, console=True):
 
                     # protected
                     if exposure == 1:
-                        # no damage if less than EF1
-                        if damage <= 2:
-                            dam_a[i][j] = 1
+                        # reduce by two
+                        pro_damage = damage - 2
 
-                        # EF0 if EF1 to EF5
-                        else:
-                            dam_a[i][j] = 2
+                        if pro_damage < 1:
+                            pro_damage = 1
+
+                        dam_a[i, j] = pro_damage
 
                     # exposed
                     else:
@@ -738,28 +737,38 @@ def expos_plot(filename, title="", colormap="default"):
 
     rr_max = rr.read(1).max()
 
-    # color palettes
+    # default palettes
     if colormap == "default":
+        # exposure map
+        if "expos" in filename:
+            cols = ["grey", "blue"]
+            cmap = matplotlib.colors.ListedColormap(cols)
+            cmap.set_under('white')
+
+        # damage map
+        elif "damage" in filename:
+            all_cols = ["grey", "purple", "blue", "green", "yellow", "orange", "red"]
+            cols = []
+            for i in range(0, rr_max):
+                cols.append(all_cols[i])
+            cmap = matplotlib.colors.ListedColormap(cols)
+            cmap.set_under('white')
+
+        # dem, etc
+        else:
+            cmap = plt.get_cmap("viridis")
+            cmap.set_under('white')  
+    
+    # rasterio palette
+    elif colormap == "r_default":
         cmap = plt.get_cmap("viridis")
         cmap.set_under('white')  
-    
-    elif colormap == "exposure":
-        cols = ["grey", "blue"]
-        cmap = matplotlib.colors.ListedColormap(cols)
-        cmap.set_under('white')
 
-    elif colormap == "damage":
-        all_cols = ["grey", "purple", "blue", "green", "yellow", "orange", "red"]
-        cols = []
-        for i in range(0, rr_max):
-            cols.append(all_cols[i])
-        cmap = matplotlib.colors.ListedColormap(cols)
-        cmap.set_under('white')
-
+    # user-specified palette
     else:
         cmap = plt.get_cmap(colormap)
         cmap.set_under('white')
-
+       
     # create plot
     if "dem" in filename:
         if title == "":
