@@ -30,7 +30,7 @@
 # is the inflection angle.
 
 # Emery R. Boose
-# November 2021
+# January 2022
 
 # Python version 3.7.11
 
@@ -651,7 +651,7 @@ def expos_damage (hurricane, inflection_angle, save=True, console=True):
 
     if (save == True):
         # save modeled results in GeoTiff file
-        dam_file = cwd + "/" + hurricane + "-damage.tif"
+        dam_file = cwd + "/" + hurricane + "-damage-" + str(inflection_angle).zfill(2) + ".tif"
 
         dam_tif = rio.open(dam_file, 'w', **profile)
         dam_tif.write(dam_a, 1)
@@ -720,13 +720,17 @@ def expos_summarize(filename, console=True):
 ### PLOTTING FUNCTIONS ####################################
 
 # expos_plot creates a plot of a specified raster file. Optional arguments
-# include plot type, title, and color palette.
+# include plot title, horizontal units, vertical units, and color palette.
 #   filename - name of input raster file
 #   title - plot title
+#   h_units - horizontal units
+#   v_units - vertical units
 #   colormap - color palette
 # no return value
 
-def expos_plot(filename, title="", colormap="default"):
+def expos_plot(filename, title="", h_units="meters", v_units="meters",
+    colormap="default"):
+    
     # get current working directory
     cwd = os.getcwd()
  
@@ -768,19 +772,27 @@ def expos_plot(filename, title="", colormap="default"):
     else:
         cmap = plt.get_cmap(colormap)
         cmap.set_under('white')
-       
+
     # create plot
     if "dem" in filename:
         if title == "":
             title = "Elevation"
+        v_units_str = "   " + v_units
+        plt.xlabel(h_units)
+        plt.ylabel(h_units)
         img = rr.read(1)
         plt.title(title)
         plt.imshow(img, cmap=cmap, vmin=0.9)
+        cbar = plt.colorbar(shrink=0.3)
+        cbar.ax.set_title(v_units_str)
         show((rr, 1), cmap=cmap, vmin=0.9)
  
     elif "expos" in filename:
         if title == "":
-            title = filename
+            x = filename.split("-")
+            title = "Exposure " + x[1] + "-" + x[2]
+        plt.xlabel(h_units)
+        plt.ylabel(h_units)
         img = rr.read(1)
         plt.title(title)
         vals = [0, 1, 2]
@@ -789,11 +801,15 @@ def expos_plot(filename, title="", colormap="default"):
         cbar = plt.colorbar(shrink=0.3)
         cbar.set_ticks(vals)
         cbar.set_ticklabels(labs)
+        cbar.ax.set_title("   Expos")
         show((rr, 1), cmap=cmap, vmin=0.9)
 
     elif "damage" in filename:
         if title == "":
-            title = filename
+            x = filename.split("-")
+            title = x[0] + " Damage " + x[2]
+        plt.xlabel(h_units)
+        plt.ylabel(h_units)
         img = rr.read(1)
         plt.title(title)
         vals = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -802,6 +818,7 @@ def expos_plot(filename, title="", colormap="default"):
         cbar = plt.colorbar(shrink=0.3)
         cbar.set_ticks(vals)
         cbar.set_ticklabels(labs)
+        cbar.ax.set_title("   EF Scale")
         show((rr, 1), cmap=cmap, vmin=0.9)
 
     else:

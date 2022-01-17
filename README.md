@@ -3,10 +3,10 @@
 The EXPOS model estimates topographic exposure to hurricane winds as a function
 of wind direction and inflection angle.
 
-The input file is assumed to be a raster file in GeoTiff format with missing values
-represented by zero.  Cells may be rectangular but horizontal and vertical units 
-must be the same. Columns are assumed to be closely aligned with true north.
-The name of the input file is assumed to be "dem.tif".
+The input elevation file is assumed to be a raster file in GeoTiff format with 
+missing values represented by zero.  Cells may be rectangular but horizontal and 
+vertical units must be the same. Columns are assumed to be closely aligned with 
+true north. The name of the input file is assumed to be "dem.tif".
 
 The output file is a raster file in GeoTiff format with the following values: 
 0 = missing data, 1 = protected, 2 = exposed. Output files are named "expos-xxx-yy.tif"
@@ -84,7 +84,10 @@ expos_set_path("c:/expos/r/mass_30m")
 expos_model(wind_direction=90, inflection_angle=6)
 expos_damage("AL061938", inflection_angle=6)
 expos_summarize("dem")
+
+expos_plot("dem")
 expos_plot("expos-090-06")
+expos_plot("AL061938-damage-06")
 ```
 
 ## History
