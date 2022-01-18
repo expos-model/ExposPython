@@ -8,14 +8,20 @@ missing values represented by zero.  Cells may be rectangular but horizontal and
 vertical units must be the same. Columns are assumed to be closely aligned with 
 true north. The name of the input file is assumed to be "dem.tif".
 
-The output file is a raster file in GeoTiff format with the following values: 
-0 = missing data, 1 = protected, 2 = exposed. Output files are named "expos-xxx-yy.tif"
-where xxx is the wind direction and yy is the inflection angle.
+The expos_model function creates a raster file in GeoTiff format with the following
+values: 0 = missing data, 1 = protected, 2 = exposed. Output files are named 
+"expos-xxx-yy.tif" where xxx is the wind direction and yy is the inflection angle.
 
 In previous studies, a spatial resolution of 30 meters and an inflection angle of 
 6 degrees were found to work well (see below). Note that increasing the inflection 
 angle tends to decrease the size and number of protected areas while increasing 
 the odds that these sites are protected.
+
+The expos_damage function uses output from the Hurrecon model and topographic
+exposure maps for eight cardinal wind directions (N, NE, E, etc) to create maps 
+of enhanced Fujita scale wind damage for particular hurricanes.  Output files are 
+named "hhhh-damage-yy.tif" where hhhh is the hurricane ID from Hurrecon and yy is 
+the inflection angle.
 
 EXPOS is available in both R (ExposR) and Python (ExposPython) versions. 
 The model is an updated version of the original EXPOS model written in Borland 
@@ -28,16 +34,38 @@ Please note: both versions are currently under development and subject to change
 Here are the basic steps for using the model. Please see below for more details.
 
 1. Download the R or Python version of the model from GitHub.
-2. Create a directory for a particular study region.
-3. Copy the digital elevation file to this directory and rename it "dem.tif".
-4. Run the model to create exposure maps for different wind directions and inflection
-angles.
+2. Create a directory for a particular study area with subdirectories as described 
+below.
+3. Copy the digital elevation file to the dem subdirectory and rename it "dem.tif".
+4. Download geographic and political boundary shapefiles for the desired study area.
+Copy these files to the vector subdirectory and rename so the first name of each file 
+is "boundaries".
+5. Use the expos_model function to create exposure maps for different wind directions 
+and inflection angles.
+6. Use the expos_damage function to create maps of enhanced Fujita scale wind damage
+for particular hurricanes.
 
 ## Details
 
 All user functions begin with "expos". The wind direction and inflection angle must be
-specified in degrees. Input and output files for a given region are located on the same
-directory.
+specified in degrees.
+
+The user specifies a directory (exp_dir) for a given study area. Input and output
+files are stored on the following subdirectories of this directory:
+
+
+```{r}
+exp_dir/dem
+exp_dir/exposure
+exp_dir/damage
+exp_dir/vector
+```
+
+The dem subdirectory contains the input elevation file. The exposure subdirectory 
+contains output files from the expos_model function. The damage subdirectory contains
+input files from the Hurrecon model and output files from the expos_damage function.
+Shapefiles that contain geographic and political boundaries for viewing results are
+stored on the vector subdirectory.
 
 To run the model, run expos.R (R) or expos.py (Python). 
 
@@ -62,8 +90,8 @@ expos_plot
 
 The expos_set_path function sets the path for the current set of model runs.
 
-The expos_model function creates a raster file of wind exposure as a function
-of wind direction and inflection angle.
+The expos_model function creates a raster file of topographic wind exposure 
+as a function of wind direction and inflection angle.
 
 The expos_damage function uses output from Hurrecon and Expos to create a raster
 file of wind damage where topograhic exposure at each location is determined 

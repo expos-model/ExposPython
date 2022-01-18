@@ -47,12 +47,15 @@ os.environ['PROJ_LIB'] = "C:/Anaconda3/envs/hf/Library/share/proj"
 
 import sys
 import math
+import fiona
 import numpy as np
 import pandas as pd
 import rasterio as rio
 from rasterio.plot import show
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.colors
+from descartes import PolygonPatch
 
 
 ### INTERNAL FUNCTIONS ####################################
@@ -65,6 +68,26 @@ import matplotlib.colors
 def check_file_exists(file_name):
     if os.path.exists(file_name) == False or os.path.isfile(file_name) == False:
         sys.exit("File not found: " + file_name)
+
+# get_subdirectory returns the subdirectory for a given filename
+# and stops execution if the filename is not supported.
+#   filename - name of file
+# returns subdirectory
+
+def get_subdirectory(filename):
+    if filename == "dem":
+        subdir = "/dem/"
+
+    elif "expos" in filename:
+        subdir = "/exposure/"
+
+    elif "damage" in filename:
+        subdir = "/damage/"
+
+    else:
+        sys.exit("File name not supported")
+
+    return subdir
 
 # get_row_order returns True if the row order remains unchanged 
 # (quadrants I-II) or False if the row order is reversed
@@ -135,7 +158,7 @@ def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
     cwd = os.getcwd()
  
     # read dem file in GeoTiff format
-    dem_path = cwd + "/dem.tif"
+    dem_path = cwd + "/dem/dem.tif"
     check_file_exists(dem_path)
     dem_r = rio.open(dem_path)
  
@@ -273,7 +296,7 @@ def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
     # output
     if save == True:
         # save modeled values in a Geotiff file
-        expos_file = cwd + "/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
+        expos_file = cwd + "/exposure/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
     
         expos_tif = rio.open(expos_file, 'w', **profile)
         expos_tif.write(expos_f, 1)
@@ -302,7 +325,7 @@ def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
     cwd = os.getcwd()
  
     # read dem file in GeoTiff format
-    dem_path = cwd + "/dem.tif"
+    dem_path = cwd + "/dem/dem.tif"
     check_file_exists(dem_path)
     dem_r = rio.open(dem_path)
 
@@ -440,7 +463,7 @@ def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
     # output
     if save == True:
         # save modeled values in a Geotiff file
-        expos_file = cwd + "/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
+        expos_file = cwd + "/exposure/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
     
         expos_tif = rio.open(expos_file, 'w', **profile)
         expos_tif.write(expos_f, 1)
@@ -498,7 +521,7 @@ def expos_model(wind_direction, inflection_angle, save=True, console=True):
         sys.exit("Please supply inflection angle in range 0-90 degrees")
 
     # read dem file in GeoTiff format
-    dem_path = cwd + "/dem.tif"
+    dem_path = cwd + "/dem/dem.tif"
     check_file_exists(dem_path)
     dem_r = rio.open(dem_path)
  
@@ -555,12 +578,12 @@ def expos_damage (hurricane, inflection_angle, save=True, console=True):
     for i in range(0, 8):
         wind_direction = i*45
 
-        expos_file = cwd + "/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
+        expos_file = cwd + "/exposure/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
 
         ee_a[i] = rio.open(expos_file).read(1)
 
     # read dem file
-    dem_file = cwd + "/dem.tif"
+    dem_file = cwd + "/dem/dem.tif"
     dem_r = rio.open(dem_file)
 
     dem_rows = dem_r.height
@@ -576,7 +599,7 @@ def expos_damage (hurricane, inflection_angle, save=True, console=True):
     dem_r.close()
 
     # read hurrecon file
-    hur_file = cwd + "/" + hurricane + ".tif"
+    hur_file = cwd + "/damage/" + hurricane + ".tif"
     hur_r = rio.open(hur_file)
     ff_a = hur_r.read(2)  # enhanced Fujita scale
     cc_a = hur_r.read(4)  # cardinal wind direction (1-8)
@@ -592,7 +615,7 @@ def expos_damage (hurricane, inflection_angle, save=True, console=True):
     hur_r.close()
 
     # read reproject file
-    reproject_file = "reproject.csv"
+    reproject_file = cwd + "/damage/reproject.csv"
     rp = pd.read_csv(reproject_file)
 
     lat_0 = rp.lat_0[0]
@@ -651,7 +674,7 @@ def expos_damage (hurricane, inflection_angle, save=True, console=True):
 
     if (save == True):
         # save modeled results in GeoTiff file
-        dam_file = cwd + "/" + hurricane + "-damage-" + str(inflection_angle).zfill(2) + ".tif"
+        dam_file = cwd + "/damage/" + hurricane + "-damage-" + str(inflection_angle).zfill(2) + ".tif"
 
         dam_tif = rio.open(dam_file, 'w', **profile)
         dam_tif.write(dam_a, 1)
@@ -678,8 +701,11 @@ def expos_summarize(filename, console=True):
     # get current working directory
     cwd = os.getcwd()
  
+    # get subdirectory
+    subdir = get_subdirectory(filename)
+
     # read file in GeoTiff format
-    file_path = cwd + "/" + filename + ".tif"
+    file_path = cwd + subdir + filename + ".tif"
     check_file_exists(file_path)
     rr = rio.open(file_path)
 
@@ -725,21 +751,32 @@ def expos_summarize(filename, console=True):
 #   title - plot title
 #   h_units - horizontal units
 #   v_units - vertical units
+#   vector - whether to display vectory boundary files
 #   colormap - color palette
 # no return value
 
 def expos_plot(filename, title="", h_units="meters", v_units="meters",
-    colormap="default"):
+    vector=True, colormap="default"):
     
     # get current working directory
     cwd = os.getcwd()
  
+    # get subdirectory
+    subdir = get_subdirectory(filename)
+
     # read file in GeoTiff format
-    file_path = cwd + "/" + filename + ".tif"
+    file_path = cwd + subdir + filename + ".tif"
     check_file_exists(file_path)
     rr = rio.open(file_path)
 
     rr_max = rr.read(1).max()
+
+    # get vector boundary file
+    if vector == True:
+        boundaries_file = cwd + "/vector/boundaries.shp"
+        shapefile = fiona.open(boundaries_file, "r")
+        features = [feature["geometry"] for feature in shapefile]
+        shapefile.close()
 
     # default palettes
     if colormap == "default":
@@ -778,8 +815,12 @@ def expos_plot(filename, title="", h_units="meters", v_units="meters",
         if title == "":
             title = "Elevation"
         v_units_str = "   " + v_units
+        fig, ax = plt.subplots(figsize=(15, 15))
         plt.xlabel(h_units)
         plt.ylabel(h_units)
+        if vector == True:
+            patches = [PolygonPatch(feature, edgecolor="black", facecolor="none", linewidth=1) for feature in features]
+            ax.add_collection(mpl.collections.PatchCollection(patches, match_original=True))
         img = rr.read(1)
         plt.title(title)
         plt.imshow(img, cmap=cmap, vmin=0.9)
@@ -791,8 +832,12 @@ def expos_plot(filename, title="", h_units="meters", v_units="meters",
         if title == "":
             x = filename.split("-")
             title = "Exposure " + x[1] + "-" + x[2]
+        fig, ax = plt.subplots(figsize=(15, 15))
         plt.xlabel(h_units)
         plt.ylabel(h_units)
+        if vector == True:
+            patches = [PolygonPatch(feature, edgecolor="black", facecolor="none", linewidth=1) for feature in features]
+            ax.add_collection(mpl.collections.PatchCollection(patches, match_original=True))
         img = rr.read(1)
         plt.title(title)
         vals = [0, 1, 2]
@@ -808,8 +853,12 @@ def expos_plot(filename, title="", h_units="meters", v_units="meters",
         if title == "":
             x = filename.split("-")
             title = x[0] + " Damage " + x[2]
+        fig, ax = plt.subplots(figsize=(15, 15))
         plt.xlabel(h_units)
         plt.ylabel(h_units)
+        if vector == True:
+            patches = [PolygonPatch(feature, edgecolor="black", facecolor="none", linewidth=1) for feature in features]
+            ax.add_collection(mpl.collections.PatchCollection(patches, match_original=True))
         img = rr.read(1)
         plt.title(title)
         vals = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -824,6 +873,10 @@ def expos_plot(filename, title="", h_units="meters", v_units="meters",
     else:
         if title == "":
             title = filename
+        fig, ax = plt.subplots(figsize=(15, 15))
+        if vector == True:
+            patches = [PolygonPatch(feature, edgecolor="black", facecolor="none", linewidth=1) for feature in features]
+            ax.add_collection(mpl.collections.PatchCollection(patches, match_original=True))
         img = rr.read(1)
         plt.title(title)
         show((rr, 1), cmap=cmap, vmin=0.9)
