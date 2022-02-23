@@ -557,18 +557,25 @@ def expos_model(wind_direction, inflection_angle, save=True, console=True):
 # expos_damage uses output from Hurrecon and Expos to create a raster
 # of hurricane wind damage where topograhic exposure at each location
 # is determined by peak wind direction. If a location is protected, 
-# the enhanced Fujita scale rating is reduced by two. This function 
-# requires a hurricane tif file created by Hurrecon, eight exposure files 
-# created by Expos (N, NE, E, etc), and a reprojection file in csv format 
-# that contains lat long coordinates for the lower left and upper right 
-# corners of the digital elevation model.
+# the enhanced Fujita scale rating is reduced by a specified amount.
+# This function requires a hurricane tif file created by Hurrecon, 
+# eight exposure files created by Expos (N, NE, E, etc), and a reprojection
+# file in csv format that contains lat long coordinates for the lower left 
+# and upper right corners of the digital elevation model.
 #   hurricane - hurricane name (as it appears in tif file)
 #   inflection_angle - inflection angle (degrees)
+#   protection - how much to reduce damage in protected areas 
+#     (Fujita scale ratings)
 #   save - whether to save results to file
 #   console - whether to display messages in console
 # returns a raster of landscape-level wind damage
 
-def expos_damage (hurricane, inflection_angle, save=True, console=True):
+def expos_damage (hurricane, inflection_angle, protection=2, save=True, 
+    console=True):
+    
+    if console == True:
+        print("Reading files")
+
     # get current working directory
     cwd = os.getcwd()
 
@@ -628,10 +635,11 @@ def expos_damage (hurricane, inflection_angle, save=True, console=True):
 
     # calculate exposure values
     for i in range(0, dem_rows):
-        # display every 10th row number
-        if i % 10 == 0:
-            print("              ", end="")
-            print("\rrow", i, end="")
+        if console == True:
+            # display every 10th row number
+            if i % 10 == 0:
+                print("              ", end="")
+                print("\rrow", i, end="")
 
         for j in range(0, dem_cols):
             # get lat long coordinates
@@ -661,7 +669,7 @@ def expos_damage (hurricane, inflection_angle, save=True, console=True):
                     # protected
                     if exposure == 1:
                         # reduce by two
-                        pro_damage = damage - 2
+                        pro_damage = damage - protection
 
                         if pro_damage < 1:
                             pro_damage = 1
