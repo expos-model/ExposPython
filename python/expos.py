@@ -564,13 +564,13 @@ def expos_model(wind_direction, inflection_angle, save=True, console=True):
 # and upper right corners of the digital elevation model.
 #   hurricane - hurricane name (as it appears in tif file)
 #   inflection_angle - inflection angle (degrees)
-#   protection - how much to reduce damage in protected areas 
-#     (Fujita scale ratings)
+#   protect - how much to reduce damage in protected areas (Fujita scale 
+#     ratings)
 #   save - whether to save results to file
 #   console - whether to display messages in console
 # returns a raster of landscape-level wind damage
 
-def expos_damage (hurricane, inflection_angle, protection=2, save=True, 
+def expos_damage (hurricane, inflection_angle, protect, save=True, 
     console=True):
     
     if console == True:
@@ -578,6 +578,10 @@ def expos_damage (hurricane, inflection_angle, protection=2, save=True,
 
     # get current working directory
     cwd = os.getcwd()
+
+    # check protect value
+    if protect < 0 or protect > 6:
+        sys.exit("Please supply protect in range 0-6")
 
     # read exposure files as arrays
     ee_a = [None] * 8
@@ -630,7 +634,7 @@ def expos_damage (hurricane, inflection_angle, protection=2, save=True,
     lat_1 = rp.lat_1[0]
     lon_1 = rp.lon_1[0]
 
-    # create damage array
+    # create damage array (0 = missing, 1 = no damage)
     dam_a = np.where(dem_a != 0, 1, 0)
 
     # calculate exposure values
@@ -642,47 +646,53 @@ def expos_damage (hurricane, inflection_angle, protection=2, save=True,
                 print("\rrow", i, end="")
 
         for j in range(0, dem_cols):
-            # get lat long coordinates
-            hur_x = lon_0 + (lon_1 - lon_0)*(j + 0.5)/dem_cols
-            hur_y = lat_1 - (lat_1 - lat_0)*(i + 0.5)/dem_rows
-
-            # get row & col in hurricane file (note: row 1 = top of raster)
-            hur_row = math.ceil(hur_rows - hur_rows*(hur_y - hur_ymn)/(hur_ymx - hur_ymn))
-            hur_col = math.ceil(hur_cols*(hur_x - hur_xmn)/(hur_xmx - hur_xmn))
-
             # skip missing values in dem
             if dem_a[i][j] != 0:
-                # get peak wind direction (1-8)
-                pdir = int(cc_a[hur_row][hur_col])
+                # get lat long coordinates
+                hur_x = lon_0 + (lon_1 - lon_0)*(j + 0.5)/dem_cols
+                hur_y = lat_1 - (lat_1 - lat_0)*(i + 0.5)/dem_rows
 
-                if pdir == 0:
-                    # no damage if no peak wind direction
-                    dam_a[i][j] = 1
+                # get row & col in hurricane file (note: row 1 = top of raster)
+                hur_row = math.ceil(hur_rows - hur_rows*(hur_y - hur_ymn)/(hur_ymx - hur_ymn))
+                hur_col = math.ceil(hur_cols*(hur_x - hur_xmn)/(hur_xmx - hur_xmn))
 
-                else:
-                    # get topographic exposure
-                    exposure = int(ee_a[pdir-1][i][j])
+                # check if in Hurrecon output
+                if hur_row >= 0 and hur_row < hur_rows and hur_col >= 0 and hur_col < hur_cols:
+                    # get peak wind direction (1-8)
+                    pdir = int(cc_a[hur_row][hur_col])
 
-                    # get fujita scale damage (0-7)
-                    damage = int(ff_a[hur_row][hur_col])
+                    if pdir == 0:
+                        # no damage if no peak wind direction
+                        dam_a[i][j] = 1
 
-                    # protected
-                    if exposure == 1:
-                        # reduce by two
-                        pro_damage = damage - protection
-
-                        if pro_damage < 1:
-                            pro_damage = 1
-
-                        dam_a[i, j] = pro_damage
-
-                    # exposed
                     else:
-                        dam_a[i][j] = damage
+                        # get topographic exposure
+                        exposure = int(ee_a[pdir-1][i][j])
 
-    if (save == True):
+                        # get fujita scale damage (0-7)
+                        damage = int(ff_a[hur_row][hur_col])
+
+                        # protected
+                        if exposure == 1:
+                            # reduce damage
+                            pro_damage = damage - protect
+
+                            if pro_damage < 1:
+                                pro_damage = 1
+
+                            dam_a[i, j] = pro_damage
+
+                        # exposed
+                        else:
+                            dam_a[i][j] = damage
+
+                # otherwise set to missing
+                else:
+                    dam_a[i, j] = 0
+
+    if save == True:
         # save modeled results in GeoTiff file
-        dam_file = cwd + "/damage/" + hurricane + "-damage-" + str(inflection_angle).zfill(2) + ".tif"
+        dam_file = cwd + "/damage/" + hurricane + "-damage-" + str(inflection_angle).zfill(2) + "-" + str(protect) + ".tif"
 
         dam_tif = rio.open(dam_file, 'w', **profile)
         dam_tif.write(dam_a, 1)
@@ -860,7 +870,7 @@ def expos_plot(filename, title="", h_units="meters", v_units="meters",
     elif "damage" in filename:
         if title == "":
             x = filename.split("-")
-            title = x[0] + " Damage " + x[2]
+            title = x[0] + " Damage " + x[2] + "-" + x[3]
         fig, ax = plt.subplots(figsize=(15, 15))
         plt.xlabel(h_units)
         plt.ylabel(h_units)
