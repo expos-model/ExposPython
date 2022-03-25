@@ -20,8 +20,10 @@ the odds that these sites are protected.
 The expos_damage function uses output from the Hurrecon model and topographic
 exposure maps for eight cardinal wind directions (N, NE, E, etc) from the Expos
 model to create maps of enhanced Fujita scale wind damage for particular hurricanes.
-Output files are named "hhhh-damage-yy.tif" where hhhh is the hurricane ID from 
-Hurrecon and yy is the inflection angle.
+Output files are named "hhhh-damage-yy-p.tif" where hhhh is the hurricane ID from 
+Hurrecon, yy is the inflection angle, and p is protection value. The last is the
+reduction in damage (in Fujita scale ratings) in areas protected from the peak
+wind direction at that location.
 
 EXPOS is available in both R (ExposR) and Python (ExposPython) versions. 
 The model is an updated version of the original EXPOS model written in Borland 
@@ -110,12 +112,12 @@ The expos_plot function creates a plot of a specified raster file.
 ```{r}
 expos_set_path("c:/expos/r/mass_30m")
 expos_model(wind_direction=90, inflection_angle=6)
-expos_damage("AL061938", inflection_angle=6)
+expos_damage("AL1938-06", inflection_angle=6, protect=2)
 expos_summarize("dem")
 
 expos_plot("dem")
 expos_plot("expos-090-06")
-expos_plot("AL061938-damage-06")
+expos_plot("AL1938-06-damage-06-2")
 ```
 
 ## History

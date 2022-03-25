@@ -30,7 +30,7 @@
 # is the inflection angle.
 
 # Emery R. Boose
-# January 2022
+# March 2022
 
 # Python version 3.7.11
 
@@ -870,7 +870,7 @@ def expos_plot(filename, title="", h_units="meters", v_units="meters",
     elif "damage" in filename:
         if title == "":
             x = filename.split("-")
-            title = x[0] + " Damage " + x[2] + "-" + x[3]
+            title = x[0] + "-" + x[1] + " Damage " + x[3] + "-" + x[4]
         fig, ax = plt.subplots(figsize=(15, 15))
         plt.xlabel(h_units)
         plt.ylabel(h_units)
