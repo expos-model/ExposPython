@@ -30,7 +30,7 @@
 # is the inflection angle.
 
 # Emery R. Boose
-# March 2022
+# May 2022
 
 # Python version 3.7.11
 
@@ -303,7 +303,7 @@ def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
         expos_tif.close()
    
         if console == True:
-          print("\nSaving to", expos_file, "\n")
+          print("\nSaving to", expos_file)
   
     else:
         # return modeled values as raster
@@ -470,7 +470,7 @@ def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
         expos_tif.close()
    
         if console == True:
-          print("\nSaving to", expos_file, "\n")
+          print("\nSaving to", expos_file)
   
     else:
         # return modeled values as raster
@@ -509,6 +509,10 @@ def expos_set_path(exp_path, console=True):
 # no return value
 
 def expos_model(wind_direction, inflection_angle, save=True, console=True):
+    # announcement
+    if console == True:
+        print("... Modeling exposure ...")
+
     # get current working directory
     cwd = os.getcwd()
  
@@ -573,8 +577,9 @@ def expos_model(wind_direction, inflection_angle, save=True, console=True):
 def expos_damage (hurricane, inflection_angle, protect, save=True, 
     console=True):
     
+    # announcement
     if console == True:
-        print("Reading files")
+        print("... Modeling damage ...")
 
     # get current working directory
     cwd = os.getcwd()
@@ -699,7 +704,7 @@ def expos_damage (hurricane, inflection_angle, protect, save=True,
         dam_tif.close()
    
         if console == True:
-          print("\nSaving to", dam_file, "\n")
+          print("Saving to", dam_file)
 
     else:
         # return modeled values as raster
@@ -716,6 +721,10 @@ def expos_damage (hurricane, inflection_angle, protect, save=True,
 # returns a string containing summary information
 
 def expos_summarize(filename, console=True):
+    # announcement
+    if console == True:
+        print("... Summarizing raster ...")
+
     # get current working directory
     cwd = os.getcwd()
  
@@ -754,7 +763,7 @@ def expos_summarize(filename, console=True):
     st = st + "Easting: " + str(round(xmn)) + " to " + str(round(xmx)) + "\n"
     st = st + "Cell height: " + str(round(cell_y)) + "\n"
     st = st + "Cell width: " + str(round(cell_x)) + "\n"
-    st = st + "Values: " + str(round(val_min, 1)) + " to " + str(round(val_max, 1)) + "\n"
+    st = st + "Values: " + str(round(val_min, 1)) + " to " + str(round(val_max, 1))
     
     # display results in console
     if console == True:
@@ -771,11 +780,16 @@ def expos_summarize(filename, console=True):
 #   v_units - vertical units
 #   vector - whether to display vectory boundary files
 #   colormap - color palette
+#   console - whether to display results in console
 # no return value
 
 def expos_plot(filename, title="", h_units="meters", v_units="meters",
-    vector=True, colormap="default"):
+    vector=True, colormap="default", console=True):
     
+    # announcement
+    if console == True:
+        print("... Plotting raster ...")
+
     # get current working directory
     cwd = os.getcwd()
  
