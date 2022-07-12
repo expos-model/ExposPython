@@ -14,23 +14,13 @@
 #   License along with this program.  If not, see
 #   <http://www.gnu.org/licenses/>.
 
-# The EXPOS model uses a digital elevation model to estimate exposed and
-# protected areas for a given wind direction and inflection angle.
-
-# The input file is assumed to be a raster file in GeoTiff format with 
-# missing values represented by zero.  Cells may be rectangular but 
-# horizontal and vertical units must be the same. Columns are assumed
-# to be closely aligned with true north (if not, wind direction values
-# must be adjusted accordingly). The name of the input file is 
-# assumed to be "dem.tif".
-
-# The output file is a raster file in GeoTiff format with the following
-# values: 0 = missing data, 1 = protected, 2 = exposed. Output files
-# are named "expos-xxx-yy.tif" where xxx is the wind direction and yy
-# is the inflection angle.
+# The EXPOS model uses a digital elevation model (DEM) to estimate exposed
+# and protected areas for a given hurricane wind direction and inflection angle.
+# The resulting topograhic exposure maps can be combined with output from the 
+# HURRECON model to estimate hurricane wind damage across a region.
 
 # Emery R. Boose
-# May 2022
+# July 2022
 
 # Python version 3.7.11
 
@@ -89,6 +79,22 @@ def get_subdirectory(filename):
 
     return subdir
 
+# check_lat_long tries to determine if the raster coordinate system
+# is latitude/longitude in degrees.  It returns TRUE if X values are 
+# between -180 and 180 and Y values are between -90 and 90; otherwise
+# it returns FALSE.
+#   xmn - minimum X value
+#   xmx - maximum X value
+#   ymn - minimum Y value
+#   ymx - maximum Y value
+# returns whether coordinates are lat/long (True or False)
+
+def check_lat_long(xmn, xmx, ymn, ymx):
+    if xmn >= -180 and xmx <= 180 and ymn >= -90 and ymx <= 90:
+        return True
+    else:
+        return False
+
 # get_row_order returns True if the row order remains unchanged 
 # (quadrants I-II) or False if the row order is reversed
 # (quadrants III-IV).
@@ -142,18 +148,20 @@ def get_transposed_wind_direction(wdir):
 
     return t_dir
 
-# west_north_west creates and saves a raster of exposure values for
-# transposed wind directions between 270 degrees and the cell diagonal 
-# (WNW). The transposed matrix of elevation values is processed in column
+# west_north_west returns a raster of exposure values for transposed 
+# wind directions between 270 degrees and the cell diagonal (WNW). 
+# The transposed matrix of elevation values is processed in column
 # major order.
 #   wind_direction - wind direction (degrees)
 #   inflection_angle - inflection angle (degrees)
 #   t_dir - transposed wind direction (degrees)
-#   save - whether to save results to file
-#   console - whether to display messages in console
+#   lat_long - whether coordinate system is latitude/longitude
 # returns a raster of modeled exposure values
 
-def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
+def west_north_west(wind_direction, inflection_angle, t_dir, lat_long):
+    # convert 1 degree of latitude to meters
+    deg2meters = 111195
+
     # get current working directory
     cwd = os.getcwd()
  
@@ -162,10 +170,6 @@ def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
     check_file_exists(dem_path)
     dem_r = rio.open(dem_path)
  
-    # get profile
-    profile = dem_r.profile
-    profile.update(dtype='int32', nodata=-9999, count=1)
-
     # get number of rows & columns
     nrows = dem_r.height
     ncols = dem_r.width
@@ -180,6 +184,16 @@ def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
     cell_x = (xmx-xmn)/ncols
     cell_y = (ymx-ymn)/nrows
   
+    # check for lat/long
+    if lat_long == None:
+        lat_long = check_lat_long(xmn, xmx, ymn, ymx)
+
+    # adjust if lat/long
+    if lat_long == True:
+        lat_mid = ymn + (ymx-ymn)/2
+        cell_x = cell_x*deg2meters*math.cos(lat_mid*math.pi/180)
+        cell_y = cell_y*deg2meters
+
     # set exposure values
     pro_value = 1
     exp_value = 2
@@ -293,34 +307,23 @@ def west_north_west(wind_direction, inflection_angle, t_dir, save, console):
         xx  = np.flip(zz, 0)
         expos_f = np.flip(xx, 1)
 
-    # output
-    if save == True:
-        # save modeled values in a Geotiff file
-        expos_file = cwd + "/exposure/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
-    
-        expos_tif = rio.open(expos_file, 'w', **profile)
-        expos_tif.write(expos_f, 1)
-        expos_tif.close()
-   
-        if console == True:
-          print("\nSaving to", expos_file)
-  
-    else:
-        # return modeled values as raster
-        return expos_f
+    # return modeled values as raster
+    return expos_f
 
-# north_north_west creates and saves a raster of exposure values for
-# transposed wind directions between the cell diagonal and 360 degrees 
-# (NNW). The transposed matrix of elevation values is processed in row
+# north_north_west returns a raster of exposure values for transposed 
+# wind directions between the cell diagonal and 360 degrees (NNW). 
+# The transposed matrix of elevation values is processed in row
 # major order.
 #   wind_direction - wind direction (degrees)
 #   inflection_angle - inflection angle (degrees)
 #   t_dir - transposed wind direction (degrees)
-#   save - whether to save results to file
-#   console - whether to display messages in console
+#   lat_long - whether coordinate system is latitude/longitude
 # returns a raster of modeled exposure values
 
-def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
+def north_north_west(wind_direction, inflection_angle, t_dir, lat_long):
+    # convert 1 degree of latitude to meters
+    deg2meters = 111195
+
     # get current working directory
     cwd = os.getcwd()
  
@@ -329,10 +332,6 @@ def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
     check_file_exists(dem_path)
     dem_r = rio.open(dem_path)
 
-    # get profile
-    profile = dem_r.profile
-    profile.update(dtype='int32', nodata=-9999, count=1)
- 
     # get number of rows & columns
     nrows = dem_r.height
     ncols = dem_r.width
@@ -347,6 +346,16 @@ def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
     cell_x = (xmx-xmn)/ncols
     cell_y = (ymx-ymn)/nrows
   
+    # check for lat/long
+    if lat_long == None:
+        lat_long = check_lat_long(xmn, xmx, ymn, ymx)
+
+    # adjust if lat/long
+    if lat_long == True:
+        lat_mid = ymn + (ymx-ymn)/2
+        cell_x = cell_x*deg2meters*math.cos(lat_mid*math.pi/180)
+        cell_y = cell_y*deg2meters
+
     # set exposure values
     pro_value = 1
     exp_value = 2
@@ -460,21 +469,8 @@ def north_north_west(wind_direction, inflection_angle, t_dir, save, console):
         xx  = np.flip(zz, 0)
         expos_f = np.flip(xx, 1)
 
-    # output
-    if save == True:
-        # save modeled values in a Geotiff file
-        expos_file = cwd + "/exposure/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
-    
-        expos_tif = rio.open(expos_file, 'w', **profile)
-        expos_tif.write(expos_f, 1)
-        expos_tif.close()
-   
-        if console == True:
-          print("\nSaving to", expos_file)
-  
-    else:
-        # return modeled values as raster
-        return expos_f
+    # return modeled values as raster
+    return expos_f
 
 
 ### UTILITY FUNCTIONS #####################################
@@ -496,22 +492,51 @@ def expos_set_path(exp_path, console=True):
     if console == True:
         print("Path set to", exp_path)
 
+# expos_get_path returns the current path for a set of model runs.
+#   console - whether to display messages in console
+#   results - whether to return results
+# returns current path if results is True
+
+def expos_get_path(console=True, results=False):
+    exp_path = os.getcwd()
+
+    if console == True:
+        print(exp_path)
+
+    if results == True:
+        return exp_path;
+
 
 ### MODELING FUNCTIONS ####################################
 
 # expos_model uses a raster file of elevation values, a specified wind
 # direction, and a specified inflection angle to create a raster file
 # of wind exposure values (0 = missing data, 1 = protected, 2 = exposed).
+# The user can specify if coordinates are lat/long; otherwise lat/long 
+# is assumed if X values are between -180 and 180 and Y values are between
+# -90 and 90. If lat/long, horizontal and vertical units are assumed 
+# to be degrees and meters, respectively; otherwise horizontal and vertical 
+# units must be the same. Columns are assumed to be closely aligned with 
+# true North (0 degrees); if not, the map orientation (azimuth) must be 
+# specified in degrees. The name of the input file is assumed to be "dem.tif".
 #   wind_direction - wind direction (degrees)
 #   inflection_angle - inflection angle (degrees)
+#   lat_long - whether coordinate system is latitude/longitude
+#   orient - map orientation (degrees)
 #   save - whether to save results to file
 #   console - whether to display messages in console
-# no return value
+#   results - whether to return results
+# returns a raster of model results if results is True
 
-def expos_model(wind_direction, inflection_angle, save=True, console=True):
+def expos_model(wind_direction, inflection_angle, lat_long=None, orient=0,
+    save=True, console=True, results=False):
+    
     # announcement
     if console == True:
         print("... Modeling exposure ...")
+
+    # convert 1 degree of latitude to meters
+    deg2meters = 111195
 
     # get current working directory
     cwd = os.getcwd()
@@ -529,6 +554,10 @@ def expos_model(wind_direction, inflection_angle, save=True, console=True):
     check_file_exists(dem_path)
     dem_r = rio.open(dem_path)
  
+    # get profile
+    profile = dem_r.profile
+    profile.update(dtype='int32', nodata=-9999, count=1)
+
     # get number of rows & columns
     nrows = dem_r.height
     ncols = dem_r.width
@@ -545,37 +574,71 @@ def expos_model(wind_direction, inflection_angle, save=True, console=True):
     cell_x = (xmx-xmn)/ncols
     cell_y = (ymx-ymn)/nrows
   
+    # check for lat/long
+    if lat_long == None:
+        lat_long = check_lat_long(xmn, xmx, ymn, ymx)
+
+    # adjust if lat/long
+    if lat_long == True:
+        lat_mid = ymn + (ymx-ymn)/2
+        cell_x = cell_x*deg2meters*math.cos(lat_mid*math.pi/180)
+        cell_y = cell_y*deg2meters
+
     # get angle of cell diagonal
     cell_diagonal = 360 - 180*math.atan(cell_x/cell_y)/math.pi;
+
+    # adjust wind direction for map orientation
+    wind_direction = wind_direction - orient
+
+    if wind_direction < 0:
+        wind_direction = wind_direction + 360
 
     # get transposed wind direction
     t_dir = get_transposed_wind_direction(wind_direction)
   
     # create exposure map
     if t_dir < cell_diagonal:
-        west_north_west(wind_direction, inflection_angle, t_dir, save, console)
+        expos_r = west_north_west(wind_direction, inflection_angle, t_dir, lat_long)
 
     else:
-        north_north_west(wind_direction, inflection_angle, t_dir, save, console)
+        expos_r = north_north_west(wind_direction, inflection_angle, t_dir, lat_long)
 
-# expos_damage uses output from Hurrecon and Expos to create a raster
-# of hurricane wind damage where topograhic exposure at each location
-# is determined by peak wind direction. If a location is protected, 
-# the enhanced Fujita scale rating is reduced by a specified amount.
-# This function requires a hurricane tif file created by Hurrecon, 
-# eight exposure files created by Expos (N, NE, E, etc), and a reprojection
-# file in csv format that contains lat long coordinates for the lower left 
-# and upper right corners of the digital elevation model.
+    # save to file
+    if save == True:
+        # save modeled values in a Geotiff file
+        expos_file = cwd + "/exposure/expos-" + str(wind_direction).zfill(3) + "-" + str(inflection_angle).zfill(2) + ".tif"
+
+        expos_tif = rio.open(expos_file, 'w', **profile)
+        expos_tif.write(expos_r, 1)
+        expos_tif.close()
+
+        if console == True:
+            print("\nSaving to", expos_file)
+
+    # return results
+    if results == True:
+        return expos_r
+
+#' expos_damage uses output from the EXPOS and HURRECON models to create 
+#' a raster of hurricane wind damage where topographic exposure at each 
+#' location is determined by peak wind direction. If a location is protected, 
+#' the enhanced Fujita scale rating from HURRECON is reduced by a specified 
+#' amount. This function requires a hurricane file in GeoTiff format created 
+#' by HURRECON, exposure files created by EXPOS for the eight cardinal wind 
+#' directions (N, NE, E, etc), and a reprojection file in CSV format 
+#' (reproject.csv) that contains lat/long coordinates in degrees for the 
+#' lower left and upper right corners of the digital elevation model.
 #   hurricane - hurricane name (as it appears in tif file)
 #   inflection_angle - inflection angle (degrees)
 #   protect - how much to reduce damage in protected areas (Fujita scale 
 #     ratings)
 #   save - whether to save results to file
 #   console - whether to display messages in console
-# returns a raster of landscape-level wind damage
+#   results - whether to return results
+# returns a raster of results if results is True
 
 def expos_damage (hurricane, inflection_angle, protect, save=True, 
-    console=True):
+    console=True, results=False):
     
     # announcement
     if console == True:
@@ -695,6 +758,7 @@ def expos_damage (hurricane, inflection_angle, protect, save=True,
                 else:
                     dam_a[i, j] = 0
 
+    # save to file
     if save == True:
         # save modeled results in GeoTiff file
         dam_file = cwd + "/damage/" + hurricane + "-damage-" + str(inflection_angle).zfill(2) + "-" + str(protect) + ".tif"
@@ -704,23 +768,27 @@ def expos_damage (hurricane, inflection_angle, protect, save=True,
         dam_tif.close()
    
         if console == True:
-          print("Saving to", dam_file)
+          print("\nSaving to", dam_file)
 
-    else:
+    if results == True:
         # return modeled values as raster
         return dam_a
 
 
 ### SUMMARIZING FUNCTIONS #################################
 
-# expos_summarize displays summary information for a specified raster
-# file, including the number of rows and columns, spatial extent, cell
-# height and width, and minimum and maximum value.
+#' expos_summarize displays summary information for a specified raster
+#' file, including the number of rows and columns, spatial extent, cell
+#' height and width, and minimum and maximum value. The user can specify 
+#' if coordinates are lat/long; otherwise lat/long is assumed if X values 
+#' are between -180 and 180 and Y values are between -90 and 90.
 #   filename - name of input raster file
+#   lat_long - whether coordinate system is latitude/longitude
 #   console - whether to display results in console
-# returns a string containing summary information
+#   results - whether to return results
+# returns a summary string if results is True
 
-def expos_summarize(filename, console=True):
+def expos_summarize(filename, lat_long=None, console=True, results=False):
     # announcement
     if console == True:
         print("... Summarizing raster ...")
@@ -750,6 +818,16 @@ def expos_summarize(filename, console=True):
     cell_x = (xmx-xmn)/ncols
     cell_y = (ymx-ymn)/nrows
 
+    # check for lat/long
+    if lat_long == None:
+        lat_long = check_lat_long(xmn, xmx, ymn, ymx)
+
+    # adjust if lat/long
+    if lat_long == True:
+        lat_mid = ymn + (ymx-ymn)/2
+        cell_x = cell_x*deg2meters*math.cos(lat_mid*math.pi/180)
+        cell_y = cell_y*deg2meters
+
     # get min & max values
     aa = rr.read()
     rr.close()
@@ -769,13 +847,21 @@ def expos_summarize(filename, console=True):
     if console == True:
         print(st)
 
+    # return results
+    if results == True:
+        return st
+
 
 ### PLOTTING FUNCTIONS ####################################
 
-# expos_plot creates a plot of a specified raster file. Optional arguments
-# include plot title, horizontal units, vertical units, and color palette.
+#' expos_plot creates a plot of a raster file. The user can specify if
+#' coordinates are lat/long; otherwise lat/long is assumed if X values 
+#' are between -180 and 180 and Y values are between -90 and 90. Optional 
+#' arguments include plot title, horizontal units, vertical units, vector 
+#' boundary files, and color palette. 
 #   filename - name of input raster file
 #   title - plot title
+#   lat_long - whether coordinate system is latitude/longitude
 #   h_units - horizontal units
 #   v_units - vertical units
 #   vector - whether to display vectory boundary files
@@ -783,8 +869,8 @@ def expos_summarize(filename, console=True):
 #   console - whether to display results in console
 # no return value
 
-def expos_plot(filename, title="", h_units="meters", v_units="meters",
-    vector=True, colormap="default", console=True):
+def expos_plot(filename, title="", lat_long=None, h_units="meters", 
+    v_units="meters", vector=True, colormap="default", console=True):
     
     # announcement
     if console == True:
@@ -802,6 +888,20 @@ def expos_plot(filename, title="", h_units="meters", v_units="meters",
     rr = rio.open(file_path)
 
     rr_max = rr.read(1).max()
+
+    # check for lat/long
+    if lat_long == None:
+        xmn = rr.bounds.left
+        xmx = rr.bounds.right
+        ymn = rr.bounds.bottom
+        ymx = rr.bounds.top
+
+        lat_long = check_lat_long(xmn, xmx, ymn, ymx)
+
+    # adjust units
+    if lat_long == True:
+        h_units = "degrees"
+        v_units = "meters"
 
     # get vector boundary file
     if vector == True:
